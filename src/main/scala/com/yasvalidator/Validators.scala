@@ -14,7 +14,14 @@ import scala.util.Try
  * Data Validators and Converters. 
  *
  */
-sealed trait ValidationResult[+T]
+sealed trait ValidationResult[+T]{
+
+  def isValid = this match {
+    case Valid(_) => true
+    case _ => false
+  }
+
+}
 
 case class Valid[+T](value:T) extends ValidationResult[T]
 
