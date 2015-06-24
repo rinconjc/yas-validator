@@ -1,5 +1,7 @@
 package com.yasvalidator
 
+import java.util.{Date, ResourceBundle}
+
 import org.specs2.mutable.Specification
 import Converters._
 /**
@@ -8,6 +10,8 @@ import Converters._
 class ValidatorsTest extends Specification{
 
   import Validators.{empty => emptyValidator, _}
+
+  implicit lazy val res = ResourceBundle.getBundle("test-validation-messages")
 
   "field validators" >> {
     "reject null or empty strings" >> {
@@ -75,9 +79,21 @@ class ValidatorsTest extends Specification{
 
   "generate error messages" >> {
     "error messages" >> {
-      mandatory("").invalid.message("name") must not beNull
+      mandatory("").invalid.message("name") === "Field 'name' is mandatory"
+    }
+  }
+
+  "apply validations" >>{
+    "array of strings" >>{
+      val input = Array("hello","123","true","20-10-2014")
+      val validations = Array(mandatory, numeric as integer, boolean, date("dd-MM-yyyy"))
+      val results = input.zip(validations).map{case (in, fn) => fn(in)}
+      results must not beNull
     }
   }
 
 
 }
+
+
+case class Person(name:String, id:Int, active:Boolean, dateOfBirth:Date)
