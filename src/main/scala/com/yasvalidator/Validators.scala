@@ -7,6 +7,7 @@ import java.text.SimpleDateFormat
 import java.util.{ResourceBundle, Date}
 
 import com.yasvalidator.Converters._
+import com.yasvalidator.Validators.InputValidator
 
 import scala.util.Try
 
@@ -15,20 +16,28 @@ import scala.util.Try
  *
  */
 sealed trait ValidationResult[+T]{
-
-  def isValid = this match {
-    case Valid(_) => true
-    case _ => false
-  }
-
+  def isValid:Boolean
+  def invalid:Invalid[T] = throw new Exception("this is valid")
+  def valid:Valid[T] = throw new Exception("this is invalid")
 }
 
-case class Valid[+T](value:T) extends ValidationResult[T]
+case class Valid[+T](value:T) extends ValidationResult[T]{
+  override def isValid = true
+  override def valid: Valid[T] = this
+}
 
 case class Invalid[+T](messageKey: String, args:Any*) extends ValidationResult[T]{
+  /**
+   * generates the error message
+   * @param fieldName
+   * @param res
+   * @return
+   */
   def message(fieldName:String)(implicit res: ResourceBundle):String={
-    res.getString(messageKey).format(fieldName, args:_*)
+    res.getString(messageKey).format((fieldName +: args):_*)
   }
+  override def isValid = false
+  override def invalid: Invalid[T] = this
 }
 
 object Validators {
@@ -56,22 +65,7 @@ object Validators {
 
     def as[R](converter: ValueConverter[R])(implicit ev1: String =:= T, ev2: T =:= String) = (in: String) => validator(in) match {
       case Valid(v) => converter(v)
-      case Invalid(error) => Invalid(error)
-    }
-  }
-
-  /**
-   * A converter function wrapper that allows combining with other converters or validators
-   */
-  implicit class RichConverter[T](val converter: ValueConverter[T]) extends AnyVal {
-    def validating(validator: InputValidator[T]) = converter.andThen {
-      case Valid(v) => validator(v)
-      case Invalid(e) => Invalid(e)
-    }
-
-    def or(other: ValueConverter[T]): ValueConverter[T] = in => converter(in) match {
-      case Invalid(_) => other(in)
-      case valid => valid
+      case invalid => invalid
     }
   }
 
@@ -96,11 +90,6 @@ object Validators {
    * A validator that checks if the input is numeric
    */
   val numeric: InputValidator[String] = (in) => Try(BigDecimal(in)).map(_ => Valid(in)).getOrElse(Invalid("numeric", in))
-
-  /**
-   * A converter to non-numeric
-   */
-  val nonNumber: InputValidator[String] = in => Try(JDouble.valueOf(in)).map(_ => Invalid("not-numeric", in)).getOrElse(Valid(in))
 
   /**
    * A validator that checks if the input is alphanumeric
@@ -132,6 +121,21 @@ object Converters{
   type ValueConverter[R] = String => ValidationResult[R]
 
   /**
+   * A converter function wrapper that allows combining with other converters or validators
+   */
+  implicit class RichConverter[T](val converter: ValueConverter[T]) extends AnyVal {
+    def validating(validator: InputValidator[T]) = converter.andThen {
+      case Valid(v) => validator(v)
+      case invalid => invalid
+    }
+
+    def or(other: ValueConverter[T]): ValueConverter[T] = in => converter(in) match {
+      case Valid(r) => Valid(r)
+      case _ => other(in)
+    }
+  }
+
+  /**
    * A converter to integer
    */
   val integer: ValueConverter[Integer] = (in) => Try(Integer.valueOf(in.trim)).map(Valid(_)).getOrElse(Invalid("to-integer", in))
@@ -145,6 +149,11 @@ object Converters{
    * A converter to Double
    */
   val double: ValueConverter[JDouble] = in => Try(JDouble.valueOf(in.trim)).map(Valid(_)).getOrElse(Invalid("to-double", in))
+
+  /**
+   * A converter to non-numeric
+   */
+  val nonNumber: ValueConverter[String] = in => Try(JDouble.valueOf(in)).map(_ => Invalid("not-numeric", in)).getOrElse(Valid(in))
 
   /**
    * A function that creates converters to Date using the specified date format.

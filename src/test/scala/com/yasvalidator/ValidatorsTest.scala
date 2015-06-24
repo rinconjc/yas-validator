@@ -73,5 +73,11 @@ class ValidatorsTest extends Specification{
     }
   }
 
+  "generate error messages" >> {
+    "error messages" >> {
+      mandatory("").invalid.message("name") must not beNull
+    }
+  }
+
 
 }
